@@ -1,3 +1,17 @@
+from typing import NamedTuple, Union
+
+ERRO = 0
+IDENTIFICADOR = 1
+NUM_INT = 2
+NUM_REAL = 3
+EOS = 4
+
+class Atomo(NamedTuple):
+    tipo: int
+    lexema: str
+    valor: Union[int, float, str]
+    linha: int
+
 class AnalisadorLexico:
     def __init__(self, source_code):
         self.code = source_code
@@ -23,10 +37,6 @@ class AnalisadorLexico:
         skip_chars = [' ', '\t', '\r', '\n']
         possible_comment = ['/', '(', '*', ')', '{', '}']
 
-        comment_chars = [
-            ['/', '/'], ['(', '*'], ['*', ')']
-        ]
-
         while True:
             
             if char in skip_chars:
@@ -40,7 +50,17 @@ class AnalisadorLexico:
             elif char in possible_comment:
                 next_char = self.peak_char(1)
 
-                if [char, next_char] in comment_chars:
+                if [char, next_char] == ['(', '*']:
+                    while [char, next_char] !=  ['*',')']:
+                        self.next_char()
+                        char = self.peak_char()
+
+                if char == '{':
+                    while char !=  '}':
+                        self.next_char()
+                        char = self.peak_char()
+
+                if [char, next_char] == ['/', '/']:
                     print('É um comentário')
                     while char != '\n':
                         self.next_char()

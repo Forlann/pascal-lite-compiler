@@ -6,6 +6,8 @@ IDENTIFICADOR = 1
 NUM_INT = 2
 NUM_REAL = 3
 EOS = 4
+PALAVRAS_RESERVADAS = ["begin", "boolean", "div", "do", "else", "end", "false", "if", "integer", "mod", "program", "read", "then", "true", "not", "var", "while",
+"write"]
 
 class Atomo(NamedTuple):
     tipo: int
@@ -34,13 +36,19 @@ class AnalisadorLexico:
         lexema = c
         c = self.proximo_char()
         estado = 1
-        
+        x = []
+
         while True:
             if estado == 1:
                 if c.isalnum(): # letras ou dígitos
                     lexema += c
                     c = self.proximo_char()
+                    x.append(c)
                 else:
+                    palavra = str(x)
+                    if palavra in PALAVRAS_RESERVADAS:
+                        print("É uma palavra reservada")
+                        return Atomo(palavra.upper(), lexema, 0, self.nlinha)
                     estado = 2
             elif estado == 2:
                 self.retrair()
