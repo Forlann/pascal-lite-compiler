@@ -6,11 +6,14 @@ NUM_INT = 2
 NUM_REAL = 3
 EOS = 4
 
+PALAVRAS_RESERVADAS = ["begin", "boolean", "div", "do", "else", "end", "false", "if", "integer", "mod", "program", "read", "then", "true", "not", "var", "while",
+"write"]
+
 class Atomo(NamedTuple):
-    tipo: int
+    type: int
     lexema: str
-    valor: Union[int, float, str]
-    linha: int
+    value: Union[int, float, str]
+    line: int
 
 class AnalisadorLexico:
     def __init__(self, source_code):
@@ -18,59 +21,60 @@ class AnalisadorLexico:
         self.position = 0
         self.current_line = 1
 
-    def next_char(self):
-        char = self.peak_char()
-
-        if char is not None:
+    def advance(self):
+        char = self.peek()
+        if char:
+            if char == '\n':
+                self.current_line += 1
             self.position += 1
-            return char
 
-        return None
+        return char
 
-    def peak_char(self, i=0):
-        if self.position < len(self.code):
-            return self.code[self.position + i]
-        return None
+    def peek(self, i=0):
+        index = self.position + i
+        return self.code[index] if index < len(self.code) else None
 
-    def skip_char(self):
+    def skip_whitespace_and_comments(self):
         char = self.code[self.position]
         skip_chars = [' ', '\t', '\r', '\n']
-        possible_comment = ['/', '(', '*', ')', '{', '}']
 
+        # Trata comentários e caracters não interessantes
         while True:
+            char = self.peek()
+            if char is None: break
             
             if char in skip_chars:
-                if char == '\n':
-                    self.current_line += 1
-
-                next_char = self.peak_char(1)
-                self.next_char()
-                char = self.peak_char()
-
-            elif char in possible_comment:
-                next_char = self.peak_char(1)
-
-                if [char, next_char] == ['(', '*']:
-                    while [char, next_char] !=  ['*',')']:
-                        self.next_char()
-                        char = self.peak_char()
-
-                if char == '{':
-                    while char !=  '}':
-                        self.next_char()
-                        char = self.peak_char()
-
-                if [char, next_char] == ['/', '/']:
-                    print('É um comentário')
-                    while char != '\n':
-                        self.next_char()
-                        char = self.peak_char()
-
-                    self.current_line += 1
-                    char = self.peak_char()
-                    print('Fim do comentário')
-                else: 
-                    break
+                self.advance()
+                advance = self.peek(1)
+            elif [char, self.peek(1)] == ['(', '*']:
+                self._skip_star_comment()
+            elif char == '{':
+                self._skip_curly_braces_comment()
+            elif [char, self.peek(1)] == ['/', '/']:
+                self._skip_line_comment()
             else: 
                 break
-        return char
+
+    def _skip_line_comment(self):
+        # Avança os //
+        self.advance()
+        self.advance()
+        while self.peek() and self.peek() != '\n':
+            self.advance()
+            
+    def _skip_curly_braces_comment(self):
+        self.advance() # Consome {
+        while self.peek() and self.peek() !=  '}':
+            self.advance()
+        self.advance() # Consome }
+        
+    def _skip_star_comment(self):
+        # Consome ( e *
+        self.advance() 
+        self.advance()
+        
+        while self.peek():
+            if self.peek == '*' and self.peek(1) == ')':
+                self.advance() # Consome *
+                self.advance() # Consome )
+                return self.advance()
