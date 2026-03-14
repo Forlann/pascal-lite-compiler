@@ -1,3 +1,5 @@
+from typing import NamedTuple, Union
+
 ERRO = 0
 IDENTIFICADOR = 1
 NUM_INT = 2
@@ -14,7 +16,7 @@ class Atomo(NamedTuple):
     line: int
 
 class AnalisadorLexico:
-    def _init_(self, source_code):
+    def __init__(self, source_code):
         self.code = source_code
         self.position = 0
         self.current_line = 1
@@ -48,8 +50,29 @@ class AnalisadorLexico:
         
         if char.isdigit():
             return self.handle_digits(char)
+        
+        delimiters = {
+            ";": "PONTO_VIRG",
+            ",": "VIRGULA",
+            ":": "DOIS_PONTOS",
+            "(": "ABRE_PAR",
+            ")": "FECHA_PAR",
+            "+": "MAIS",
+            "-": "MENOS",
+            "*": "MULT",
+            "/": "DIVISAO",
+            "=": "IGUAL",
+            ".": "PONTO"
+        }
+    
+        if char in delimiters:
+            self.advance()
+            return Atomo(delimiters[char], char, 0, self.current_line)
+        
+        print("Caracter Inválido")
     
     def handle_identifiers(self, c):
+        self.advance() # Consome a 1ª letra (que já estava salva no c)
         lexema = c
         c = self.advance()
         stage = 1
@@ -61,8 +84,8 @@ class AnalisadorLexico:
                     c = self.advance()
                 else:
                     if lexema in RESERVED_WORDS:
-                        print("É uma palavra reservada")
-                        return Atomo(lexema.upper(), lexema.upper(), 0, self.current_line)
+                        # print("É uma palavra reservada")
+                        return Atomo(lexema.upper(), lexema, 0, self.current_line)
                     stage = 2
             elif stage == 2:
                 self.retreat()
@@ -71,6 +94,7 @@ class AnalisadorLexico:
 
     def handle_digits(self, c):
         lexema = c
+        self.advance()
         c = self.advance()
         stage = 1
 
@@ -114,7 +138,7 @@ class AnalisadorLexico:
                 return Atomo(NUM_REAL, lexema, float(lexema), self.current_line)
 
     def skip_whitespace_and_comments(self):
-        char = self.code[self.position]
+        # char = self.code[self.position]
         skip_chars = [' ', '\t', '\r', '\n']
 
         # Trata comentários e caracters não interessantes
@@ -152,7 +176,7 @@ class AnalisadorLexico:
         self.advance()
         
         while self.peek():
-            if self.peek == '*' and self.peek(1) == ')':
+            if self.peek() == '*' and self.peek(1) == ')':
                 self.advance() # Consome *
                 self.advance() # Consome )
                 return self.advance()
