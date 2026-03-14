@@ -1,107 +1,265 @@
+# ------------------------------------------------------------
+# Compilador PascalLite - Analisador Léxico
+# Faculdade Impacta - Compiladores
+#
+# Implementa a função obter_atomo() que retorna o próximo token
+# da entrada para o analisador sintático.
+# ------------------------------------------------------------
+
+import sys
+
+# ----------------------------
+# Estrutura do Átomo (Token)
+# ----------------------------
+class Atomo:
+    def __init__(self, tipo, lexema, linha, valor=None):
+        self.tipo = tipo
+        self.lexema = lexema
+        self.linha = linha
+        self.valor = valor
+
+
+# ----------------------------
+# Palavras Reservadas
+# ----------------------------
+PALAVRAS_RESERVADAS = {
+    "begin": "BEGIN",
+    "boolean": "BOOLEAN",
+    "div": "DIV",
+    "do": "DO",
+    "else": "ELSE",
+    "end": "END",
+    "false": "FALSE",
+    "if": "IF",
+    "integer": "INTEGER",
+    "mod": "MOD",
+    "program": "PROGRAM",
+    "read": "READ",
+    "then": "THEN",
+    "true": "TRUE",
+    "not": "NOT",
+    "var": "VAR",
+    "while": "WHILE",
+    "write": "WRITE"
+}
+
+
+# ----------------------------
+# Classe do Analisador Léxico
+# ----------------------------
 class AnalisadorLexico:
-    def __init__(self, source_code):
-        self.code = source_code
-        self.position = 0
-        self.current_line = 1
-        # Lista de palavras reservadas conforme o PDF [cite: 66]
-        self.palavras_reservadas = [
-            'begin', 'boolean', 'div', 'do', 'else', 'end', 'false', 'if',
-            'integer', 'mod', 'program', 'read', 'then', 'true', 'not', 'var', 'while', 'write'
-        ]
 
-    def peak_char(self, i=0):
-        """Olha o caractere à frente sem mover o ponteiro de posição."""
-        if self.position + i < len(self.code):
-            return self.code[self.position + i]
-        return None
+    def __init__(self, arquivo):
+        with open(arquivo, 'r', encoding="utf-8") as f:
+            self.codigo = f.read()
 
-    def next_char(self):
-        """Lê o próximo caractere e avança a posição."""
-        char = self.peak_char()
-        if char:
-            if char == '\n':
-                self.current_line += 1
-            self.position += 1
-        return char
+        self.pos = 0
+        self.linha = 1
+        self.tamanho = len(self.codigo)
 
-    def skip_ignorable(self):
-        """Ignora espaços e comentários, mantendo a contagem de linhas[cite: 61, 65]."""
+    # ---------------------------------
+    # Lê próximo caractere
+    # ---------------------------------
+    def proximo_char(self):
+        if self.pos >= self.tamanho:
+            return None
+        return self.codigo[self.pos]
+
+    # ---------------------------------
+    # Avança posição
+    # ---------------------------------
+    def avancar(self):
+        c = self.proximo_char()     # lê o caractere atual
+        self.pos += 1               # avança a posição no código fonte
+        
+        # se o caractere for quebra de linha,
+        # incrementa o contador de linhas
+        if c == '\n':
+            self.linha += 1
+        return c
+
+    # ---------------------------------
+    # Ignora espaços e comentários
+    # ---------------------------------
+    def ignorar_espacos_e_comentarios(self):
+
         while True:
-            char = self.peak_char()
-            
-            # 1. Espaços em branco e quebras de linha [cite: 61]
-            if char in [' ', '\t', '\r', '\n']:
-                self.next_char()
-                continue
-            
-            # 2. Comentários de linha // [cite: 62]
-            if char == '/' and self.peak_char(1) == '/':
-                while self.peak_char() and self.peak_char() != '\n':
-                    self.next_char()
+
+            c = self.proximo_char()
+
+            # Espaços
+            if c in [' ', '\t', '\r', '\n']:
+                self.avancar()
                 continue
 
-            # 3. Comentários de bloco (* *) [cite: 63]
-            if char == '(' and self.peak_char(1) == '*':
-                self.next_char() # consome (
-                self.next_char() # consome *
-                while self.peak_char() and not (self.peak_char() == '*' and self.peak_char(1) == ')'):
-                    self.next_char()
-                self.next_char() # consome *
-                self.next_char() # consome )
+            # Comentário //
+            if c == '/' and self.pos+1 < self.tamanho and self.codigo[self.pos+1] == '/':
+                while c != '\n' and c is not None:
+                    c = self.avancar()
                 continue
 
-            # 4. Comentários de bloco { } [cite: 64]
-            if char == '{':
-                while self.peak_char() and self.peak_char() != '}':
-                    self.next_char()
-                self.next_char() # consome }
+            # Comentário (* *)
+            if c == '(' and self.pos+1 < self.tamanho and self.codigo[self.pos+1] == '*':
+                self.avancar()
+                self.avancar()
+                while True:
+                    if self.proximo_char() == '*' and self.codigo[self.pos+1] == ')':
+                        self.avancar()
+                        self.avancar()
+                        break
+                    if self.proximo_char() is None:
+                        self.erro("Comentário não fechado")
+                    self.avancar()
                 continue
-            
-            break # Se não for espaço nem comentário, para de pular
 
+            # Comentário { }
+            if c == '{':
+                self.avancar()
+                while self.proximo_char() != '}':
+                    if self.proximo_char() is None:
+                        self.erro("Comentário não fechado")
+                    self.avancar()
+                self.avancar()
+                continue
+
+            break
+
+    # ---------------------------------
+    # Erro léxico
+    # ---------------------------------
+    def erro(self, msg):
+        print(f"Erro léxico: {msg} na linha {self.linha}")
+        sys.exit(1)
+
+    # ---------------------------------
+    # Reconhece identificador ou palavra reservada
+    # ---------------------------------
+    def identificador(self):
+
+        inicio = self.pos
+
+        while self.proximo_char() and (
+                self.proximo_char().isalnum() or self.proximo_char() == "_"):
+            self.avancar()
+
+        lexema = self.codigo[inicio:self.pos]
+
+        if len(lexema) > 20:
+            self.erro("Identificador com mais de 20 caracteres")
+
+        if lexema in PALAVRAS_RESERVADAS:
+            return Atomo(PALAVRAS_RESERVADAS[lexema], lexema, self.linha)
+
+        return Atomo("IDENTIF", lexema, self.linha)
+
+    # ---------------------------------
+    # Reconhece número
+    # ---------------------------------
+    def numero(self):
+
+        inicio = self.pos
+
+        while self.proximo_char() and self.proximo_char().isdigit():
+            self.avancar()
+
+        lexema = self.codigo[inicio:self.pos]
+
+        return Atomo("NUM", lexema, self.linha, int(lexema))
+
+    # ---------------------------------
+    # Obtém próximo átomo
+    # ---------------------------------
     def obter_atomo(self):
-        """A função principal que o analisador sintático chamará[cite: 7]."""
-        self.skip_ignorable()
-        char = self.peak_char()
 
-        if char is None:
-            return {'atomo': 'EOF', 'lexema': 'EOF', 'linha': self.current_line}
+        self.ignorar_espacos_e_comentarios()
 
-        # Reconhecimento de Identificadores e Palavras Reservadas [cite: 67, 68]
-        if char.isalpha() or char == '_':
-            lexema = ""
-            while char and (char.isalnum() or char == '_'):
-                lexema += self.next_char()
-                char = self.peak_char()
-            
-            # Erro de tamanho de identificador 
-            if len(lexema) > 20:
-                return f"Erro Léxico: Identificador '{lexema}' muito longo na linha {self.current_line}"
+        c = self.proximo_char()
 
-            tipo = lexema.upper() if lexema in self.palavras_reservadas else 'IDENTIF'
-            return {'atomo': tipo, 'lexema': lexema, 'linha': self.current_line}
+        if c is None:
+            return None
 
-        # Reconhecimento de Números 
-        if char.isdigit():
-            lexema = ""
-            while char and char.isdigit():
-                lexema += self.next_char()
-                char = self.peak_char()
-            return {'atomo': 'NUM', 'lexema': lexema, 'linha': self.current_line}
+        # Identificador
+        if c.isalpha() or c == "_":
+            return self.identificador()
 
-        # Reconhecimento de Operadores e Delimitadores 
-        # Exemplo para atribuição ':='
-        if char == ':' and self.peak_char(1) == '=':
-            self.next_char(); self.next_char()
-            return {'atomo': 'ATRIB', 'lexema': ':=', 'linha': self.current_line}
-        
-        # Outros símbolos simples (ponto e vírgula, etc)
-        simbolos = {';': 'PONTO_VIRG', ':': 'DOIS_PONTOS', ',': 'VIRGULA', '.': 'PONTO', 
-                    '(': 'ABRE_PARENTES', ')': 'FECHA_PARENTES', '+': 'SOMA', '-': 'SUB'}
-        
-        if char in simbolos:
-            lex = self.next_char()
-            return {'atomo': simbolos[lex], 'lexema': lex, 'linha': self.current_line}
+        # Número
+        if c.isdigit():
+            return self.numero()
 
-        # Se chegar aqui e não reconhecer nada, é erro léxico [cite: 79]
-        return f"Erro Léxico: Caractere inesperado '{self.next_char()}' na linha {self.current_line}"
+        # Operadores compostos
+        if c == ':' and self.codigo[self.pos+1] == '=':
+            self.avancar()
+            self.avancar()
+            return Atomo("ATRIB", ":=", self.linha)
+
+        if c == '<':
+            self.avancar()
+            if self.proximo_char() == '=':
+                self.avancar()
+                return Atomo("MENOR_IGUAL", "<=", self.linha)
+            elif self.proximo_char() == '>':
+                self.avancar()
+                return Atomo("DIF", "<>", self.linha)
+            return Atomo("MENOR", "<", self.linha)
+
+        if c == '>':
+            self.avancar()
+            if self.proximo_char() == '=':
+                self.avancar()
+                return Atomo("MAIOR_IGUAL", ">=", self.linha)
+            return Atomo("MAIOR", ">", self.linha)
+
+        # Delimitadores
+        simples = {
+            ";": "PONTO_VIRG",
+            ",": "VIRGULA",
+            ":": "DOIS_PONTOS",
+            "(": "ABRE_PAR",
+            ")": "FECHA_PAR",
+            "+": "MAIS",
+            "-": "MENOS",
+            "*": "MULT",
+            "/": "DIVISAO",
+            "=": "IGUAL",
+            ".": "PONTO"
+        }
+
+        if c in simples:
+            self.avancar()
+            return Atomo(simples[c], c, self.linha)
+
+        self.erro(f"Caractere inválido {c}")
+
+
+# ----------------------------
+# Execução do Léxico
+# ----------------------------
+def executar_lexico(arquivo):
+
+    lexico = AnalisadorLexico(arquivo)
+
+    while True:
+
+        atomo = lexico.obter_atomo()
+
+        if atomo is None:
+            break
+
+        if atomo.tipo == "NUM":
+            print(
+                f"Linha: {atomo.linha} - atomo: {atomo.tipo} lexema: {atomo.lexema} valor: {atomo.valor}")
+        else:
+            print(
+                f"Linha: {atomo.linha} - atomo: {atomo.tipo} lexema: {atomo.lexema}")
+
+
+# ----------------------------
+# Main
+# ----------------------------
+if __name__ == "__main__":
+
+    if len(sys.argv) != 2:
+        print("Uso: python lexico.py arquivo.pas")
+        sys.exit(1)
+
+    executar_lexico(sys.argv[1])
