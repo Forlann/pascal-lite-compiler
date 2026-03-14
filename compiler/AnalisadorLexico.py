@@ -1,10 +1,22 @@
 from typing import NamedTuple, Union
 
+# Átomos (tokens)
 ERRO = 0
 IDENTIFICADOR = 1
 NUM_INT = 2
 NUM_REAL = 3
 EOS = 4
+RELOP = 5
+ADDOP = 6
+MULOP = 7
+
+# Operadores Relacionais
+LE = 1000
+NE = 1001
+LT = 1002
+GE = 1003
+GT = 1004
+EQ = 1005
 
 PALAVRAS_RESERVADAS = ["begin", "boolean", "div", "do", "else", "end", "false", "if", "integer", "mod", "program", "read", "then", "true", "not", "var", "while",
 "write"]
@@ -52,6 +64,8 @@ class AnalisadorLexico:
                 self._skip_curly_braces_comment()
             elif [char, self.peek(1)] == ['/', '/']:
                 self._skip_line_comment()
+            elif [char, self.peek(1)] == ['\0']:
+                return Atomo (EOS, '', 0, self.current_line)
             else: 
                 break
 
@@ -78,3 +92,22 @@ class AnalisadorLexico:
                 self.advance() # Consome *
                 self.advance() # Consome )
                 return self.advance()
+
+atomo_msg = ['ERRO','IDENTIF','NUM_INT','NUM_REAL','EOS']
+def main():
+    buffer = "leia_arquivo ()"
+    lex = AnalisadorLexico(buffer)
+    atomo = lex.Atomo()
+    while ( atomo.tipo != EOS and atomo.tipo != ERRO ):
+        print (" Linha : {}".format(atomolinha))
+        print ("-  ́a tomo : {}".format(atomo_msg[atomo.tipo]))
+        print ("\t\ tlexema : {}".format(atomolexema))
+        print ("\t\ tvalor : {}".format(atomovalor) )
+        atomo = lex.proximo_atomo()
+
+    print (" Linha: {}".format(atomo.linha))
+    print (" - atomo: {} ".format(atomo_msg[atomo.tipo ]))
+    print ("\t\ tlexema: {}".format(atomo.lexema))
+    print ("\t\ tvalor: {}".format(atomo.valor))
+
+main()
