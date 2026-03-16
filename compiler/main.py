@@ -5,7 +5,7 @@ ERRO = 0
 IDENTIFICADOR = 1
 NUM_INT = 2
 NUM_REAL = 3
-EOS = 4      
+EOS = 4
             
 def analisar_arquivo(caminho_arquivo):
     try:

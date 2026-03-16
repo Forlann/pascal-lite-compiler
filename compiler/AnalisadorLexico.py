@@ -32,6 +32,9 @@ class AnalisadorLexico:
     
     def retreat(self):
         self.position -= 1
+        
+        if self.peek() == '\n':
+            self.current_line -= 1
 
     def peek(self, i=0):
         index = self.position + i
@@ -42,7 +45,7 @@ class AnalisadorLexico:
 
         char = self.peek()
 
-        if char is None:
+        if char is None or char == "\0":
             return Atomo(EOS, "EOF", 0, self.current_line)
         
         if char.isalpha() or char == "_":
@@ -66,30 +69,31 @@ class AnalisadorLexico:
         }
     
         if char in delimiters:
+            if [char, self.peek(1)] == [':', '=']: 
+                self.advance()
+                return Atomo("ATRIB", ':=', 0, self.current_line)
             self.advance()
             return Atomo(delimiters[char], char, 0, self.current_line)
         
         print("Caracter Inválido")
     
     def handle_identifiers(self, c):
-        self.advance() # Consome a 1ª letra (que já estava salva no c)
+        self.advance()
         lexema = c
         c = self.advance()
-        stage = 1
 
         while True:
-            if stage == 1:
-                if c.isalnum(): # letras ou dígitos
-                    lexema += c
-                    c = self.advance()
+            if c is not None and (c.isalnum() or c == '_'): 
+                lexema += c
+                c = self.advance()
+            else:
+                if c is not None:
+                    self.retreat()
+
+                if lexema.lower() in RESERVED_WORDS:
+                    return Atomo(lexema.upper(), lexema, 0, self.current_line)
                 else:
-                    if lexema in RESERVED_WORDS:
-                        # print("É uma palavra reservada")
-                        return Atomo(lexema.upper(), lexema, 0, self.current_line)
-                    stage = 2
-            elif stage == 2:
-                self.retreat()
-                return Atomo(IDENTIFICADOR, lexema, 0, self.current_line)
+                    return Atomo(IDENTIFICADOR, lexema, 0, self.current_line)
 
 
     def handle_digits(self, c):
@@ -180,3 +184,4 @@ class AnalisadorLexico:
                 self.advance() # Consome *
                 self.advance() # Consome )
                 return self.advance()
+            
