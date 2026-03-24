@@ -65,7 +65,9 @@ class AnalisadorLexico:
             "*": "MULT",
             "/": "DIVISAO",
             "=": "IGUAL",
-            ".": "PONTO"
+            ".": "PONTO",
+            ">": "MAIOR QUE",
+            "<": "MENOR QUE"
         }
     
         if char in delimiters:
@@ -178,10 +180,10 @@ class AnalisadorLexico:
         # Consome ( e *
         self.advance() 
         self.advance()
-        
         while self.peek():
             if self.peek() == '*' and self.peek(1) == ')':
                 self.advance() # Consome *
                 self.advance() # Consome )
                 return self.advance()
+            self.advance()
             

@@ -21,7 +21,7 @@ def analisar_arquivo(caminho_arquivo):
             atomo = analisador.next_atom()
             
             if atomo is None:
-                print("Atomo esta vazio")
+                # print("Atomo esta vazio")
                 break
                 
             print(f"{str(atomo.type):<15} | {str(atomo.lexema):<15} | {str(atomo.value):<10} | {atomo.line}")
