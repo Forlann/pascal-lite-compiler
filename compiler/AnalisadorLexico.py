@@ -6,7 +6,7 @@ NUM_INT = 2
 NUM_REAL = 3
 EOS = 4
 
-RESERVED_WORDS = ["begin", "boolean", "div", "do", "else", "end", "false", "if", "integer", "mod", "program", "read", "then", "true", "not", "var", "while",
+RESERVED_WORDS = ["and", "begin", "boolean", "div", "do", "else", "end", "false", "if", "integer", "mod", "or", "program", "read", "then", "true", "not", "var", "while",
 "write"]
 
 class Atomo(NamedTuple):
@@ -114,6 +114,7 @@ class AnalisadorLexico:
                     self.retreat()
 
                 if len(lexema) > 20:
+                    print(f"Erro léxico: identificador '{lexema}' excede 20 caracteres na linha {self.current_line}")
                     return Atomo(ERRO, lexema, 0, self.current_line)
                 if lexema.lower() in RESERVED_WORDS:
                     return Atomo(lexema.upper(), lexema, 0, self.current_line)
@@ -129,15 +130,16 @@ class AnalisadorLexico:
 
         while True:
             if stage == 1:
-                if c.isdigit():
+                if c is not None and c.isdigit():
                     lexema += c
                     c = self.advance()
                 elif c == '.':
                     lexema += c
                     stage = 3
                     c = self.advance()
-                elif c.isalpha():
-                     return Atomo(ERRO, lexema, 0, self.current_line)
+                elif c is not None and c.isalpha():
+                    print(f"Erro léxico: número inválido '{lexema}' na linha {self.current_line}")
+                    return Atomo(ERRO, lexema, 0, self.current_line)
                 else:
                     stage = 2 # É Inteiro
 
@@ -157,7 +159,8 @@ class AnalisadorLexico:
                 if c.isdigit():
                     lexema += c
                     c = self.advance()
-                elif c.isalpha():
+                elif c is not None and c.isalpha():
+                    print(f"Erro léxico: número inválido '{lexema}' na linha {self.current_line}")
                     return Atomo(ERRO, lexema, 0, self.current_line)
                 else:
                     stage = 5
@@ -207,6 +210,6 @@ class AnalisadorLexico:
             if self.peek() == '*' and self.peek(1) == ')':
                 self.advance() # Consome *
                 self.advance() # Consome )
-                return self.advance()
+                return
             self.advance()
             

@@ -1,5 +1,16 @@
-from AnalisadorLexico import IDENTIFICADOR, NUM_INT, NUM_REAL, EOS
+from AnalisadorLexico import IDENTIFICADOR, NUM_INT, NUM_REAL, EOS, ERRO
 import sys
+
+_NOMES_TIPO = {
+    ERRO: "ERRO",
+    IDENTIFICADOR: "IDENTIF",
+    NUM_INT: "NUM",
+    NUM_REAL: "NUM_REAL",
+    EOS: "EOS",
+}
+
+def _nome_tipo(tipo):
+    return _NOMES_TIPO.get(tipo, str(tipo))
 
 
 class AnalisadorSintatico:
@@ -14,7 +25,7 @@ class AnalisadorSintatico:
             self.lookahead = self.lexico.next_atom()
         else:
             print(
-                f"Erro sintático: Esperado [{tipo_esperado}] encontrado [{self.lookahead.type}] na linha {self.lookahead.line}")
+                f"Erro sintático: Esperado [{_nome_tipo(tipo_esperado)}] encontrado [{_nome_tipo(self.lookahead.type)}] na linha {self.lookahead.line}")
             sys.exit(1)
 
     def regra_do_programa(self):
