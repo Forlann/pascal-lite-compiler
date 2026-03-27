@@ -83,7 +83,7 @@ Ao final de um programa correto:
 Em caso de erro léxico:
 
 ```
-Erro léxico: identificador 'identificador_muito_longo_demais' excede 20 caracteres na linha 4
+Erro léxico: identificador 'identificador_muito_longo' excede 20 caracteres na linha 4
 ```
 
 Em caso de erro sintático:
