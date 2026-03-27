@@ -54,10 +54,16 @@ class AnalisadorLexico:
         if char.isdigit():
             return self.handle_digits(char)
         
-        delimiters = {
+        DELIMITERS = ";,:()+*/.=-><"
+        if char in DELIMITERS:
+            return self.handle_delimiters(char)
+
+        print("Caracter Inválido")
+    
+    def handle_delimiters(self, char):
+        SINGLE = {
             ";": "PONTO_VIRG",
             ",": "VIRGULA",
-            ":": "DOIS_PONTOS",
             "(": "ABRE_PAR",
             ")": "FECHA_PAR",
             "+": "MAIS",
@@ -66,19 +72,34 @@ class AnalisadorLexico:
             "/": "DIVISAO",
             "=": "IGUAL",
             ".": "PONTO",
-            ">": "MAIOR QUE",
-            "<": "MENOR QUE"
         }
-    
-        if char in delimiters:
-            if [char, self.peek(1)] == [':', '=']: 
+
+        self.advance()
+        next_char = self.peek()
+
+        if char == ':':
+            if next_char == '=':
                 self.advance()
                 return Atomo("ATRIB", ':=', 0, self.current_line)
-            self.advance()
-            return Atomo(delimiters[char], char, 0, self.current_line)
-        
-        print("Caracter Inválido")
-    
+            return Atomo("DOIS_PONTOS", ':', 0, self.current_line)
+
+        if char == '>':
+            if next_char == '=':
+                self.advance()
+                return Atomo("MAIOR_IGUAL", '>=', 0, self.current_line)
+            return Atomo("MAIOR", '>', 0, self.current_line)
+
+        if char == '<':
+            if next_char == '=':
+                self.advance()
+                return Atomo("MENOR_IGUAL", '<=', 0, self.current_line)
+            if next_char == '>':
+                self.advance()
+                return Atomo("DIFERENTE", '<>', 0, self.current_line)
+            return Atomo("MENOR", '<', 0, self.current_line)
+
+        return Atomo(SINGLE[char], char, 0, self.current_line)
+
     def handle_identifiers(self, c):
         self.advance()
         lexema = c
@@ -92,6 +113,8 @@ class AnalisadorLexico:
                 if c is not None:
                     self.retreat()
 
+                if len(lexema) > 20:
+                    return Atomo(ERRO, lexema, 0, self.current_line)
                 if lexema.lower() in RESERVED_WORDS:
                     return Atomo(lexema.upper(), lexema, 0, self.current_line)
                 else:
