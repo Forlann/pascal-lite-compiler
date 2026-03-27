@@ -7,8 +7,8 @@ var num1, num2: integer;
 begin
     read(num1, num2);
     if num1 > num2 then
-        _maior := n1
+        _maior := n1;
     else
         _maior := n2;
-    write(_maior)
+    write(_maior);
 end
