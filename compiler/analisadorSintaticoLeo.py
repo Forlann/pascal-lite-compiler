@@ -1,266 +1,460 @@
+from typing import NamedTuple, Union
+
+# --- Definição dos Átomos (Tokens) ---
+ERRO = 0
+IDENTIFICADOR = 1
+NUM_INT = 2
+NUM_REAL = 3
+EOS = 4
+PALAVRA_RESERVADA = 5
+OPERADOR = 6
+DELIMITADOR = 7
+
+# Conjunto de palavras reservadas 
+PALAVRAS_RESERVADAS = { "begin": "BEGIN",
+    "boolean": "BOOLEAN",
+    "div": "DIV",
+    "do": "DO",
+    "else": "ELSE",
+    "end": "END",
+    "false": "FALSE",
+    "if": "IF",
+    "integer": "INTEGER",
+    "mod": "MOD",
+    "program": "PROGRAM",
+    "read": "READ",
+    "then": "THEN",
+    "true": "TRUE",
+    "not": "NOT",
+    "var": "VAR",
+    "while": "WHILE",
+    "write": "WRITE"}
+
+
+class Atomo(NamedTuple):
+    tipo: int
+    lexema: str
+    valor: Union[int, float, str]
+    linha: int
+
+class AnalisadorLexico:
+    def __init__(self, buffer):
+        self.buffer = buffer + '\0'  # Adiciona fim de string
+        self.i = 0
+        self.nlinha = 1
+
+    def proximo_char(self):
+        if self.i >= len(self.buffer):
+            return '\0'
+        c = self.buffer[self.i]
+        self.i += 1
+        return c
+
+    def retrair(self):
+        self.i -= 1
+
+    # --- Lógica para identificar palavras (Identificadores) ---
+    def tratar_identificador(self, c):
+        lexema = c
+        c = self.proximo_char()
+        estado = 1
+        
+        while True:
+            if estado == 1:
+                if c.isalnum() or c == '_': # letras ou dígitos
+                    lexema += c
+                    c = self.proximo_char()
+                else:
+                    estado = 2
+            elif estado == 2:
+                self.retrair()
+                #verifica se é palavra reservada antes de retornar
+                if lexema in PALAVRAS_RESERVADAS:
+                    return Atomo(PALAVRA_RESERVADA, lexema, 0, self.nlinha)
+                return Atomo(IDENTIFICADOR, lexema, 0, self.nlinha)
+
+    # --- Lógica para identificar números (Inteiros e Reais) ---
+    def tratar_numero(self, c):
+        lexema = c
+        c = self.proximo_char()
+        estado = 1
+
+        while True:
+            if estado == 1:
+                if c.isdigit():
+                    lexema += c
+                    c = self.proximo_char()
+                elif c == '.':
+                    lexema += c
+                    estado = 3
+                    c = self.proximo_char()
+                elif c.isalpha():
+                     return Atomo(ERRO, lexema, 0, self.nlinha)
+                else:
+                    estado = 2 # É Inteiro
+
+            elif estado == 2:
+                self.retrair()
+                return Atomo(NUM_INT, lexema, int(lexema), self.nlinha)
+
+            elif estado == 3: # Parte decimal
+                if c.isdigit():
+                    lexema += c
+                    estado = 4
+                    c = self.proximo_char()
+                else:
+                    return Atomo(ERRO, lexema, 0, self.nlinha)
+
+            elif estado == 4:
+                if c.isdigit():
+                    lexema += c
+                    c = self.proximo_char()
+                elif c.isalpha():
+                    return Atomo(ERRO, lexema, 0, self.nlinha)
+                else:
+                    estado = 5
+
+            elif estado == 5:
+                self.retrair()
+                return Atomo(NUM_REAL, lexema, float(lexema), self.nlinha)
+
+    # --- Método Principal que decide o que fazer ---
+    def pular_espacos_e_comentarios(self):
+        c = self.proximo_char()
+        while True:
+            # 1. Pular espaços
+            if c in [' ', '\n', '\t', '\r']:
+                if c == '\n':
+                    self.nlinha += 1
+                c = self.proximo_char()
+                continue
+            
+            # 2. Verificar início de comentário
+            if c == '/' and self.i < len(self.buffer):
+                next_c = self.buffer[self.i] # Espia o próximo sem avançar
+                
+                # Comentário de Linha (//)
+                if next_c == '/':
+                    self.proximo_char() # Consome o segundo '/'
+                    while c != '\n' and c != '\0':
+                        c = self.proximo_char()
+                    continue 
+                
+                # Comentário de Bloco (/* ... */)
+                elif next_c == '*':
+                    self.proximo_char() # Consome o '*'
+                    c = self.proximo_char()
+                    while c != '\0':
+                        if c == '\n':
+                            self.nlinha += 1
+                        elif c == '*' and self.i < len(self.buffer) and self.buffer[self.i] == '/':
+                            self.proximo_char() # Consome o '/'
+                            c = self.proximo_char()
+                            break
+                        c = self.proximo_char()
+                    continue
+            
+            # 3. Fim da limpeza: devolve o caractere útil e sai do loop
+            self.retrair()
+            break
+    def proximo_atomo(self):
+        # 1. Primeiro, chamamos a nossa nova função que limpa a sujeira
+        self.pular_espacos_e_comentarios()
+        
+        # 2. Agora sim, pegamos o caractere limpo
+        c = self.proximo_char()
+
+        # 3. Verificamos o fim do arquivo
+        if c == '\0':
+            return Atomo(EOS, '', 0, self.nlinha)
+
+        # 4. Direcionamos para a função correta
+        if c.isalpha() or c == '_':
+            return self.tratar_identificador(c)
+        
+        if c.isdigit():
+            return self.tratar_numero(c)
+
+        # --- AS NOVIDADES ENTRAM AQUI ---
+        # 5. Operadores Relacionais e Matemáticos
+        if c in ['<', '>', '=', '!', '+', '-', '*', '/',':']:
+            return self.tratar_operador(c)
+
+        # 6. Delimitadores de código
+        if c in [';', ',', '(', ')', '{', '}','.']:
+            return Atomo(DELIMITADOR, c, 0, self.nlinha)
+
+        # Se chegou aqui, é um caractere desconhecido
+        return Atomo(ERRO, c, 0, self.nlinha)
+    
+    
+    def tratar_operador(self, c):
+        lexema = c
+        next_c = self.proximo_char()
+
+        # --- NOVIDADES AQUI ---
+        # Checa atribuição do Pascal (:=)
+        if c == ':' and next_c == '=':
+            lexema += next_c
+            return Atomo(OPERADOR, lexema, 0, self.nlinha)
+        # Se for apenas ':', tratamos como delimitador (para VAR x : integer)
+        elif c == ':' and next_c != '=':
+            self.retrair()
+            return Atomo(DELIMITADOR, lexema, 0, self.nlinha)
+
+        # Checa diferença do Pascal (<>)
+        if c == '<' and next_c == '>':
+            lexema += next_c
+            return Atomo(OPERADOR, lexema, 0, self.nlinha)
+
+        # Checa operadores lógicos/relacionais compostos (<=, >=, ==, !=)
+        if c in ['<', '>', '=', '!'] and next_c == '=':
+            lexema += next_c
+            return Atomo(OPERADOR, lexema, 0, self.nlinha)
+
+        # Se não for composto, devolve o caractere que lemos a mais para o buffer
+        self.retrair()
+
+        # Retorna o operador simples (+, -, *, /, <, > , =)
+        return Atomo(OPERADOR, lexema, 0, self.nlinha)
+
 class AnalisadorSintatico:
-    def __init__(self, lexer: AnalisadorLexico):
-        self.lexer = lexer # Instância do analisador léxico para obter tokens
-        self.current_atom = self.lexer.next_atom() # O token atual que está sendo processado
-        self.errors = [] # Lista para armazenar erros sintáticos encontrados
+    def __init__(self, lexer):
+        self.lexer = lexer
+        self.atomo_atual = self.lexer.proximo_atomo()
+        self.erros = []
 
-    def error(self, expected_types: list):
-        # Relata um erro de sintaxe.
-        # Imprime uma mensagem de erro e adiciona à lista de erros.
-        # Em parsers mais avançados, aqui haveria uma estratégia de recuperação de erros mais sofisticada.
-        found_type = self.current_atom.type
-        found_lexema = self.current_atom.lexema
-        line = self.current_atom.line
-        error_msg = f"Erro de sintaxe na linha {line}: Esperado {', '.join(expected_types)}, encontrado {found_type} ('{found_lexema}')"
-        self.errors.append(error_msg)
-        print(error_msg)
-        # Por simplicidade, avança para o próximo token para tentar continuar a análise
-        # e evitar um loop infinito em caso de erro.
-        self.current_atom = self.lexer.next_atom()
+    def erro(self, tipos_esperados: list):
+        tipo_encontrado = self.atomo_atual.tipo 
+        lexema_encontrado = self.atomo_atual.lexema
+        linha = self.atomo_atual.linha
+        
+        # Converte a lista de esperados para string para exibição limpa
+        esperados_str = ', '.join(map(str, tipos_esperados))
+        msg_erro = f"Erro de sintaxe na linha {linha}: Esperado [{esperados_str}], encontrado tipo {tipo_encontrado} ('{lexema_encontrado}')"
+        
+        self.erros.append(msg_erro)
+        print(msg_erro)
+        self.atomo_atual = self.lexer.proximo_atomo() # Avança para não travar
 
-    def eat(self, atom_type: str) -> bool:
-        # "Come" (consome) o token atual se ele for do tipo esperado.
-        # Se o tipo do token atual corresponder ao `atom_type` esperado, avança para o próximo token.
-        # Caso contrário, reporta um erro sintático.
-        if self.current_atom.type == atom_type:
-            self.current_atom = self.lexer.next_atom()
+    def consumir(self, esperado) -> bool:
+        """
+        Lógica:
+        - Se 'esperado' for inteiro (ex: IDENTIFICADOR), compara com .tipo
+        - Se 'esperado' for string (ex: 'begin', ';'), compara com .lexema
+        """
+        corresponde = False
+        
+        if isinstance(esperado, int):
+            corresponde = (self.atomo_atual.tipo == esperado)
+        elif isinstance(esperado, str):
+            corresponde = (self.atomo_atual.lexema.lower() == esperado.lower())
+
+        if corresponde:
+            self.atomo_atual = self.lexer.proximo_atomo()
             return True
         else:
-            self.error([atom_type])
+            self.erro([esperado])
             return False
 
-    def parse(self):
-        # Método principal para iniciar a análise sintática.
+    def analisar(self):
         print("Iniciando análise sintática...")
-        self.program() # Chama a regra inicial da gramática (program)
+        self.programa()
         
-        # Verifica se houve erros e se o analisador chegou ao fim do arquivo (EOS).
-        if not self.errors and self.current_atom.type == EOS:
+        if not self.erros and self.atomo_atual.tipo == EOS:
             print("Análise sintática concluída com sucesso!")
             return True
         else:
             print("Análise sintática concluída com erros.")
-            for err in self.errors:
+            for err in self.erros:
                 print(err)
             return False
 
     # =============================================================================
-    # IMPLEMENTAÇÃO DAS REGRAS GRAMATICAIS (MÉTODOS DE DESCIDA RECURSIVA)
+    # IMPLEMENTAÇÃO DAS REGRAS GRAMATICAIS (Tradução para Português)
     # =============================================================================
 
-    def program(self):
-        # Regra: program -> PROGRAM ID ; block .
-        if not self.eat("PROGRAM"): return
-        if not self.eat(IDENTIFICADOR): return
-        if not self.eat("PONTO_VIRG"): return
-        self.block()
-        if not self.eat("PONTO"): return
+    def programa(self):
+        if not self.consumir("program"): return
+        if not self.consumir(IDENTIFICADOR): return
+        if not self.consumir(";"): return
+        self.bloco()
+        if not self.consumir("."): return
 
-    def block(self):
-        # Regra: block -> [VAR declarations] [subprogram_declarations] compound_statement
-        # Bloco de declarações de variáveis é opcional.
-        if self.current_atom.type == "VAR":
-            self.declarations()
-        # Subprogram_declarations (procedimentos/funções) podem ser adicionados aqui se a gramática for expandida.
-        # if self.current_atom.type == "PROCEDURE" or self.current_atom.type == "FUNCTION":
-        #     self.subprogram_declarations()
-        self.compound_statement() # Um bloco sempre termina com um compound_statement.
+    def bloco(self):
+        if self.atomo_atual.lexema.lower() == "var":
+            self.declaracoes()
+        self.comando_composto()
 
-    def declarations(self):
-        # Regra: declarations -> VAR ID_LIST : type ; { declarations } (Simplificado para Pascal Lite)
-        # A gramática aqui permite um ou mais grupos de declaração 'VAR ... : type ;'
-        if not self.eat("VAR"): return
-        self.id_list()
-        if not self.eat("DOIS_PONTOS"): return
-        self.type_spec()
-        if not self.eat("PONTO_VIRG"): return
-        # Permite múltiplas seções VAR ou declarações contínuas de identificadores.
-        # A gramática Pascal real é mais flexível, mas esta implementação suporta:
-        # VAR id1, id2 : type1; 
-        # VAR id3 : type2;
-        # Ou
-        # VAR id1, id2 : type1; id3, id4 : type2;
-        while self.current_atom.type == IDENTIFICADOR or self.current_atom.type == "VAR":
-             if self.current_atom.type == "VAR": # Novo bloco de declaração VAR
-                 self.eat("VAR") # Consome o VAR
-             self.id_list()
-             if not self.eat("DOIS_PONTOS"): return
-             self.type_spec()
-             if not self.eat("PONTO_VIRG"): return
+    def declaracoes(self):
+        if not self.consumir("var"): return
+        self.lista_identificadores()
+        if not self.consumir(":"): return
+        self.especificacao_tipo()
+        if not self.consumir(";"): return
+        
+        # Permite múltiplas declarações na mesma sessão VAR
+        while self.atomo_atual.tipo == IDENTIFICADOR or self.atomo_atual.lexema.lower() == "var":
+             if self.atomo_atual.lexema.lower() == "var":
+                 self.consumir("var")
+             self.lista_identificadores()
+             if not self.consumir(":"): return
+             self.especificacao_tipo()
+             if not self.consumir(";"): return
 
-    def type_spec(self):
-        # Regra: type -> INTEGER | BOOLEAN
-        if self.current_atom.type == "INTEGER":
-            self.eat("INTEGER")
-        elif self.current_atom.type == "BOOLEAN":
-            self.eat("BOOLEAN")
+    def especificacao_tipo(self):
+        lexema = self.atomo_atual.lexema.lower()
+        if lexema == "integer":
+            self.consumir("integer")
+        elif lexema == "boolean":
+            self.consumir("boolean")
         else:
-            self.error(["INTEGER", "BOOLEAN"])
+            self.erro(["integer", "boolean"])
 
-    def id_list(self):
-        # Regra: ID_LIST -> ID { , ID }
-        # Uma lista de identificadores separados por vírgulas.
-        if not self.eat(IDENTIFICADOR): return
-        while self.current_atom.type == "VIRGULA":
-            self.eat("VIRGULA")
-            if not self.eat(IDENTIFICADOR): return # Deve ter um ID após a vírgula
+    def lista_identificadores(self):
+        if not self.consumir(IDENTIFICADOR): return
+        while self.atomo_atual.lexema == ",":
+            self.consumir(",")
+            if not self.consumir(IDENTIFICADOR): return
 
-    def compound_statement(self):
-        # Regra: compound_statement -> BEGIN statement_list END
-        # Um bloco de statements delimitado por BEGIN e END.
-        if not self.eat("BEGIN"): return
-        self.statement_list()
-        if not self.eat("END"): return
+    def comando_composto(self):
+        if not self.consumir("begin"): return
+        self.lista_comandos()
+        if not self.consumir("end"): return
 
-    def statement_list(self):
-        # Regra: statement_list -> statement { ; statement }
-        # Uma lista de statements, onde cada statement é opcionalmente seguido por ';'.
-        self.statement()
-        while self.current_atom.type == "PONTO_VIRG":
-            self.eat("PONTO_VIRG")
-            # Permite statements vazios (e.g., 'A:=1;; B:=2;') ou o ponto e vírgula antes de END.
-            # Se o próximo token for END ou EOS, não esperamos outro statement.
-            if not (self.current_atom.type == "END" or self.current_atom.type == EOS):
-                self.statement()
+    def lista_comandos(self):
+        self.comando()
+        while self.atomo_atual.lexema == ";":
+            self.consumir(";")
+            if not (self.atomo_atual.lexema.lower() == "end" or self.atomo_atual.tipo == EOS):
+                self.comando()
 
-    def statement(self):
-        # Regra: statement -> assignment_statement
-        #                  | if_statement
-        #                  | while_statement
-        #                  | read_statement
-        #                  | write_statement
-        #                  | compound_statement
-        #                  | (empty) - implicitamente tratado se nenhum dos anteriores for correspondido
-        # Determina o tipo de statement com base no token atual (lookahead).
-        if self.current_atom.type == IDENTIFICADOR: # Pode ser um statement de atribuição
-            self.assignment_statement()
-        elif self.current_atom.type == "IF":
-            self.if_statement()
-        elif self.current_atom.type == "WHILE":
-            self.while_statement()
-        elif self.current_atom.type == "READ":
-            self.read_statement()
-        elif self.current_atom.type == "WRITE":
-            self.write_statement()
-        elif self.current_atom.type == "BEGIN":
-            self.compound_statement()
-        # Se não for nenhum dos tipos acima, pode ser um statement vazio ou um erro
-        # O mecanismo de recuperação de erros no método error() pode ajudar aqui.
-        # Para um statement vazio, simplesmente não fazemos nada, e o 'eat' do PONTO_VIRG 
-        # na statement_list avança para o próximo token, efetivamente consumindo-o como um statement vazio.
+    def comando(self):
+        tipo = self.atomo_atual.tipo
+        lexema = self.atomo_atual.lexema.lower()
+        
+        if tipo == IDENTIFICADOR: 
+            self.comando_atribuicao()
+        elif lexema == "if":
+            self.comando_se()
+        elif lexema == "while":
+            self.comando_enquanto()
+        elif lexema == "read":
+            self.comando_leitura()
+        elif lexema == "write":
+            self.comando_escrita()
+        elif lexema == "begin":
+            self.comando_composto()
 
-    def assignment_statement(self):
-        # Regra: assignment_statement -> ID ATRIBUICAO expression
-        # Ex: x := 10
-        if not self.eat(IDENTIFICADOR): return
-        if not self.eat("ATRIBUICAO"): return # Espera o token ':='
-        self.expression()
+    def comando_atribuicao(self):
+        if not self.consumir(IDENTIFICADOR): return
+        if not self.consumir(":="): return
+        self.expressao()
 
-    def if_statement(self):
-        # Regra: if_statement -> IF condition THEN statement [ELSE statement]
-        # Ex: IF x > 0 THEN write(x) ELSE write(0)
-        if not self.eat("IF"): return
-        self.condition()
-        if not self.eat("THEN"): return
-        self.statement()
-        if self.current_atom.type == "ELSE": # A cláusula ELSE é opcional
-            self.eat("ELSE")
-            self.statement()
+    def comando_se(self):
+        if not self.consumir("if"): return
+        self.condicao()
+        if not self.consumir("then"): return
+        self.comando()
+        if self.atomo_atual.lexema.lower() == "else":
+            self.consumir("else")
+            self.comando()
 
-    def while_statement(self):
-        # Regra: while_statement -> WHILE condition DO statement
-        # Ex: WHILE x > 0 DO x := x - 1
-        if not self.eat("WHILE"): return
-        self.condition()
-        if not self.eat("DO"): return
-        self.statement()
+    def comando_enquanto(self):
+        if not self.consumir("while"): return
+        self.condicao()
+        if not self.consumir("do"): return
+        self.comando()
 
-    def read_statement(self):
-        # Regra: read_statement -> READ ( ID_LIST )
-        # Ex: READ (x, y)
-        if not self.eat("READ"): return
-        if not self.eat("ABRE_PAR"): return
-        self.id_list()
-        if not self.eat("FECHA_PAR"): return
+    def comando_leitura(self):
+        if not self.consumir("read"): return
+        if not self.consumir("("): return
+        self.lista_identificadores()
+        if not self.consumir(")"): return
 
-    def write_statement(self):
-        # Regra: write_statement -> WRITE ( expression_list )
-        # Ex: WRITE (x + y, 'Resultado')
-        if not self.eat("WRITE"): return
-        if not self.eat("ABRE_PAR"): return
-        self.expression_list()
-        if not self.eat("FECHA_PAR"): return
+    def comando_escrita(self):
+        if not self.consumir("write"): return
+        if not self.consumir("("): return
+        self.lista_expressoes()
+        if not self.consumir(")"): return
 
-    def expression_list(self):
-        # Regra: expression_list -> expression { , expression }
-        # Uma lista de expressões separadas por vírgulas.
-        self.expression()
-        while self.current_atom.type == "VIRGULA":
-            self.eat("VIRGULA")
-            self.expression()
+    def lista_expressoes(self):
+        self.expressao()
+        while self.atomo_atual.lexema == ",":
+            self.consumir(",")
+            self.expressao()
 
-    def condition(self):
-        # Regra: condition -> expression relational_operator expression
-        #                  | NOT condition
-        #                  | ( condition )
-        # Lida com expressões booleanas e operadores relacionais.
-        if self.current_atom.type == "NOT":
-            self.eat("NOT")
-            self.condition()
-        elif self.current_atom.type == "ABRE_PAR":
-            self.eat("ABRE_PAR")
-            self.condition()
-            if not self.eat("FECHA_PAR"): return
+    def condicao(self):
+        if self.atomo_atual.lexema.lower() == "not":
+            self.consumir("not")
+            self.condicao()
+        elif self.atomo_atual.lexema == "(":
+            self.consumir("(")
+            self.condicao()
+            if not self.consumir(")"): return
         else:
-            self.expression() # Primeira expressão
-            self.relational_operator() # Operador de comparação (ex: =, <, >)
-            self.expression() # Segunda expressão
+            self.expressao()
+            self.operador_relacional()
+            self.expressao()
 
-    def expression(self):
-        # Regra: expression -> term { ( MAIS | MENOS ) term }
-        # Lida com operações de adição e subtração (maior precedência para term).
-        self.term()
-        while self.current_atom.type in ("MAIS", "MENOS"):
-            self.eat(self.current_atom.type) # Consome o operador (+ ou -)
-            self.term()
+    def expressao(self):
+        self.termo()
+        while self.atomo_atual.lexema in ("+", "-"):
+            self.consumir(self.atomo_atual.lexema) 
+            self.termo()
 
-    def term(self):
-        # Regra: term -> factor { ( MULT | DIVISAO | DIV | MOD ) factor }
-        # Lida com operações de multiplicação, divisão (/, DIV, MOD) (maior precedência para factor).
-        self.factor()
-        while self.current_atom.type in ("MULT", "DIVISAO", "DIV", "MOD"):
-            self.eat(self.current_atom.type) # Consome o operador (*, /, DIV, MOD)
-            self.factor()
+    def termo(self):
+        self.fator()
+        while self.atomo_atual.lexema.lower() in ("*", "/", "div", "mod"):
+            self.consumir(self.atomo_atual.lexema)
+            self.fator()
 
-    def factor(self):
-        # Regra: factor -> ID | NUM_INT | NUM_REAL | TRUE | FALSE | ( expression ) | NOT factor
-        # Elementos mais básicos de uma expressão.
-        if self.current_atom.type == IDENTIFICADOR:
-            self.eat(IDENTIFICADOR)
-        elif self.current_atom.type == NUM_INT:
-            self.eat(NUM_INT)
-        elif self.current_atom.type == NUM_REAL:
-            self.eat(NUM_REAL)
-        elif self.current_atom.type == "TRUE":
-            self.eat("TRUE")
-        elif self.current_atom.type == "FALSE":
-            self.eat("FALSE")
-        elif self.current_atom.type == "ABRE_PAR":
-            self.eat("ABRE_PAR")
-            self.expression()
-            if not self.eat("FECHA_PAR"): return
-        elif self.current_atom.type == "NOT":
-            self.eat("NOT")
-            self.factor()
+    def fator(self):
+        tipo = self.atomo_atual.tipo
+        lexema = self.atomo_atual.lexema.lower()
+        
+        if tipo == IDENTIFICADOR:
+            self.consumir(IDENTIFICADOR)
+        elif tipo == NUM_INT:
+            self.consumir(NUM_INT)
+        elif tipo == NUM_REAL:
+            self.consumir(NUM_REAL)
+        elif lexema == "true":
+            self.consumir("true")
+        elif lexema == "false":
+            self.consumir("false")
+        elif lexema == "(":
+            self.consumir("(")
+            self.expressao()
+            if not self.consumir(")"): return
+        elif lexema == "not":
+            self.consumir("not")
+            self.fator()
         else:
-            # Se o token atual não corresponde a nenhum fator esperado, reporta um erro.
-            self.error([IDENTIFICADOR, NUM_INT, NUM_REAL, "TRUE", "FALSE", "ABRE_PAR", "NOT"])
+            self.erro([IDENTIFICADOR, NUM_INT, NUM_REAL, "true", "false", "(", "not"])
 
-    def relational_operator(self):
-        # Regra: relational_operator -> IGUAL | DIFERENTE | MENOR | MENOR_IGUAL | MAIOR | MAIOR_IGUAL
-        # Consome qualquer um dos operadores relacionais válidos.
-        rel_ops = ["IGUAL", "DIFERENTE", "MENOR", "MENOR_IGUAL", "MAIOR", "MAIOR_IGUAL"]
-        if self.current_atom.type in rel_ops:
-            self.eat(self.current_atom.type)
+    def operador_relacional(self):
+        rel_ops = ["=", "<>", "<", "<=", ">", ">=", "!="]
+        if self.atomo_atual.lexema in rel_ops:
+            self.consumir(self.atomo_atual.lexema)
         else:
-            self.error(rel_ops)
+            self.erro(rel_ops)
+
+def main():
+    try:
+        with open('entrada.txt', 'r') as f:
+            buffer = f.read()
+    except FileNotFoundError:
+        print("Erro: Crie o arquivo 'entrada.txt' na mesma pasta.")
+        return
+
+    print("--- Iniciando Compilador ---")
+    
+    lexer = AnalisadorLexico(buffer)
+    parser = AnalisadorSintatico(lexer)
+    
+    # Chama o método que agora se chama "analisar"
+    parser.analisar()
+
+if __name__ == "__main__":
+    main()
