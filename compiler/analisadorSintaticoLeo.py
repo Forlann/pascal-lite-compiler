@@ -175,7 +175,6 @@ class AnalisadorLexico:
         if c.isdigit():
             return self.tratar_numero(c)
 
-        # --- AS NOVIDADES ENTRAM AQUI ---
         # 5. Operadores Relacionais e Matemáticos
         if c in ['<', '>', '=', '!', '+', '-', '*', '/',':']:
             return self.tratar_operador(c)
@@ -191,8 +190,7 @@ class AnalisadorLexico:
     def tratar_operador(self, c):
         lexema = c
         next_c = self.proximo_char()
-
-        # --- NOVIDADES AQUI ---
+        
         # Checa atribuição do Pascal (:=)
         if c == ':' and next_c == '=':
             lexema += next_c
@@ -269,10 +267,6 @@ class AnalisadorSintatico:
             for err in self.erros:
                 print(err)
             return False
-
-    # =============================================================================
-    # IMPLEMENTAÇÃO DAS REGRAS GRAMATICAIS (Tradução para Português)
-    # =============================================================================
 
     def programa(self):
         if not self.consumir("program"): return
