@@ -2,22 +2,29 @@
 
 Compilador para a linguagem **PascalLite** — um subconjunto simplificado de Pascal — implementado em Python como trabalho da disciplina de Compiladores.
 
-O compilador realiza as fases de **análise léxica** e **análise sintática**, imprimindo cada átomo reconhecido e reportando erros com linha e descrição.
+O compilador realiza:
+
+- **Análise léxica** — tokenização do código-fonte com reporte de erros léxicos.
+- **Análise sintática** — parser recursivo descendente sobre a gramática de PascalLite, com erros sintáticos detalhados (átomo esperado vs. encontrado).
+- **Análise semântica** — minitabela de símbolos com verificação de declaração única e uso de identificadores declarados.
+- **Geração de código intermediário MEPA** — instruções emitidas em ações semânticas embutidas nas funções recursivas do parser, no estilo Kowaltowski.
 
 ---
 
-## Linguagem suportada (PascalLite)
+## Linguagem suportada (PascalLite — fase 2)
 
-Subconjunto de Pascal com suporte apenas a:
+A fase 2 simplifica a gramática original conforme o enunciado: o compilador trata **tudo como inteiro** (não há mais distinção entre expressões inteiras e lógicas).
 
-- Tipos: `integer` e `boolean`
+Subconjunto de Pascal com suporte a:
+
+- Tipo: `integer`
 - Declaração de variáveis (`var`)
 - Comandos: atribuição (`:=`), `read`, `write`, `if/then/else`, `while/do`, `begin/end`
-- Expressões com operadores aritméticos (`+`, `-`, `*`, `/`, `div`, `mod`), relacionais (`<`, `<=`, `=`, `<>`, `>`, `>=`) e booleanos (`and`, `or`, `not`)
+- Expressões com operadores aritméticos (`+`, `-`, `*`, `/`, `div`, `mod`) e relacionais (`<`, `<=`, `=`, `<>`, `>`, `>=`)
 - Comentários de linha (`//`), de bloco (`(* ... *)`) e entre chaves (`{ ... }`)
 - Identificadores de até 20 caracteres, podendo iniciar com `_`
 
-Funções e procedimentos **não** são suportados.
+> **Removido na fase 2** (vs. fase 1): tipo `boolean`, constantes `true`/`false`, operadores `and`/`or`/`not`. Funções e procedimentos continuam **não** suportados.
 
 ---
 
@@ -28,78 +35,143 @@ Funções e procedimentos **não** são suportados.
 ├── compiler/
 │   ├── main.py                  # Ponto de entrada
 │   ├── AnalisadorLexico.py      # Análise léxica (tokenizador)
-│   └── AnalisadorSintatico.py   # Análise sintática
+│   ├── AnalisadorSintatico.py   # Análise sintática + semântica + geração MEPA
+│   └── TabelaSimbolos.py        # Tabela de símbolos e erros semânticos
 ├── examples/
-│   ├── test_valido.pas          # Programa sintaticamente correto (if/else)
+│   ├── fatorial.pas             # Programa do enunciado da fase 2 (calcula fatorial)
+│   ├── test_valido.pas          # Programa correto com if/else
 │   ├── test_while.pas           # Programa correto com while
-│   ├── test_and_or.pas          # Uso de operadores booleanos and/or
-│   ├── test_erro_lexico.pas     # Identificador com mais de 20 caracteres
-│   ├── test_erro_sintatico.pas  # Erro de atribuição sem :=
-│   ├── test_comentario_bug.pas  # Comentário (* *) sem espaço antes do próximo token
-│   └── test_numero_fim.pas      # Programa sem ponto final
-├── source.pas                   # Exemplo principal
-
+│   ├── test_expr_complexa.pas   # Expressão com precedência e unário negativo
+│   ├── test_if_aninhado.pas     # Validação de rótulos em if/else aninhado
+│   ├── test_while_aninhado.pas  # Validação de rótulos em while aninhado
+│   ├── test_erro_sem_declarado.pas  # Erro semântico: variável não declarada
+│   ├── test_erro_sem_duplicado.pas  # Erro semântico: identificador duplicado
+│   ├── test_erro_lexico.pas     # Erro léxico: identificador > 20 caracteres
+│   └── test_erro_sintatico.pas  # Erro sintático: atribuição sem :=
 ```
 
 ---
 
 ## Como executar
 
+A partir da raiz do projeto:
+
 ```bash
-cd compiler
-py main.py ../source.pas
+py compiler/main.py examples/fatorial.pas
 ```
 
-Ou informe qualquer arquivo `.pas`:
+Ou entrando no diretório `compiler/`:
 
 ```bash
-py main.py ../examples/test_valido.pas
+cd compiler
+py main.py ../examples/fatorial.pas
+```
+
+O compilador:
+
+1. Imprime as instruções MEPA geradas em **stdout**.
+2. Grava o mesmo conteúdo em um arquivo **`.mepa`** ao lado do `.pas` (ex: `examples/fatorial.pas` → `examples/fatorial.mepa`).
+3. Em caso de erro, imprime a mensagem em **stderr** e termina com **exit code 1**.
+
+### Exemplo de execução
+
+Entrada (`examples/fatorial.pas`):
+```pascal
+program exemplo1;
+var fat, num, cont: integer;
+begin
+  read(num);
+  fat := 1;
+  cont := 2;
+  while cont <= num do
+  begin
+    fat := fat * num;
+    cont := cont + 1
+  end;
+  write(fat)
+end.
+```
+
+Saída (stdout e `examples/fatorial.mepa`):
+```
+INPP
+AMEM 3
+LEIT
+ARMZ 1
+CRCT 1
+ARMZ 0
+CRCT 2
+ARMZ 2
+L1: NADA
+CRVL 2
+CRVL 1
+CMEG
+DSVF L2
+CRVL 0
+CRVL 1
+MULT
+ARMZ 0
+CRVL 2
+CRCT 1
+SOMA
+ARMZ 2
+DSVS L1
+L2: NADA
+CRVL 0
+IMPR
+PARA
 ```
 
 ---
 
-## Formato de saída
+## Mensagens de erro
 
-Cada átomo reconhecido é impresso em uma linha:
-
+**Erro léxico** (identificador > 20 caracteres ou número malformado):
 ```
-Linha: 1 - atomo: PROGRAM         lexema: program
-Linha: 1 - atomo: IDENTIF         lexema: ex01
-Linha: 1 - atomo: PONTO_VIRG      lexema: ;
+Erro léxico: identificador 'identificador_muito_longo_demais' excede 20 caracteres na linha 4
 ```
 
-Para números, o valor é exibido ao final:
-
-```
-Linha: 6 - atomo: NUM             lexema: 10    valor: 10
-```
-
-Ao final de um programa correto:
-
-```
-14 linhas analisadas, programa sintaticamente correto.
-```
-
-Em caso de erro léxico:
-
-```
-Erro léxico: identificador 'identificador_muito_longo' excede 20 caracteres na linha 4
-```
-
-Em caso de erro sintático:
-
+**Erro sintático** (átomo inesperado):
 ```
 Erro sintático: Esperado [PONTO] encontrado [EOS] na linha 14
 ```
 
+**Erro semântico** (variável não declarada ou redeclaração):
+```
+Erro semântico: identificador 'b' não declarado na linha 7
+Erro semântico: identificador 'x' já declarado na linha 5
+```
+
 ---
 
-## Tokens reconhecidos
+## Mapa de instruções MEPA geradas
+
+| Construção PascalLite | Instruções MEPA |
+|---|---|
+| Início do programa | `INPP` |
+| `var x, y: integer;` (n vars) | `AMEM n` |
+| `read(x)` | `LEIT` + `ARMZ <end>` |
+| `write(expr)` | `<expr>` + `IMPR` |
+| Atribuição `x := expr` | `<expr>` + `ARMZ <end>` |
+| Identificador em expressão | `CRVL <end>` |
+| Constante numérica | `CRCT <valor>` |
+| `+` / `-` / `*` / `div` ou `/` / `mod` | `SOMA` / `SUBT` / `MULT` / `DIVI` / `MOD` |
+| Unário `-` | `INVR` |
+| `<` / `<=` / `>` / `>=` / `=` / `<>` | `CMME` / `CMEG` / `CMMA` / `CMAG` / `CMIG` / `CMDG` |
+| `if E then C` | `<E>` `DSVF L1` `<C>` `L1: NADA` |
+| `if E then C1 else C2` | `<E>` `DSVF L1` `<C1>` `DSVS L2` `L1: NADA` `<C2>` `L2: NADA` |
+| `while E do C` | `L1: NADA` `<E>` `DSVF L2` `<C>` `DSVS L1` `L2: NADA` |
+| Fim do programa | `PARA` |
+
+---
+
+## Tokens reconhecidos pelo léxico
 
 | Categoria | Exemplos de lexemas |
 |---|---|
-| Palavras reservadas | `program`, `begin`, `end`, `var`, `if`, `then`, `else`, `while`, `do`, `read`, `write`, `and`, `or`, `not`, `true`, `false`, `integer`, `boolean`, `div`, `mod` |
+| Palavras reservadas | `program`, `begin`, `end`, `var`, `if`, `then`, `else`, `while`, `do`, `read`, `write`, `integer`, `div`, `mod` |
 | Identificador | `IDENTIF` |
 | Número inteiro | `NUM` |
-| Número real | `NUM_REAL` |
 | Operadores e delimitadores | `:=`, `+`, `-`, `*`, `/`, `=`, `<`, `>`, `<=`, `>=`, `<>`, `;`, `,`, `:`, `(`, `)`, `.` |
+
+> Tokens `boolean`, `true`, `false`, `and`, `or`, `not` continuam reconhecidos pelo léxico (são palavras reservadas), mas o parser da fase 2 não os aceita em nenhuma produção, então o uso resulta em erro sintático.
